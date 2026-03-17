@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "dev": "concurrently -n frontend,backend -c blue,green 'pnpm run dev:frontend' 'pnpm run dev:backend'",
     "dev:frontend": "pnpm --filter frontend dev",
     "dev:backend": "pnpm --filter backend dev",
     "build:frontend": "pnpm --filter frontend build",
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
+    "concurrently": "^9.2.1",
     "lefthook": "^2.1.3",
     "typescript": "^5.0.0"
   },

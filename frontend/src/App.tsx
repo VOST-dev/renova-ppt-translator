@@ -1,3 +1,5 @@
+import { TranslationListPage } from "./pages/TranslationListPage";
+
 function App() {
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -7,9 +9,7 @@ function App() {
         </div>
       </header>
       <main className="container mx-auto px-4 py-8">
-        <p className="text-muted-foreground">
-          Document translation service powered by AWS Translate.
-        </p>
+        <TranslationListPage />
       </main>
     </div>
   );

@@ -29,6 +29,9 @@ pnpm dev:frontend
 
 # Start backend dev server
 pnpm dev:backend
+
+# Start both
+pnpm dev
 ```
 
 ### Build
