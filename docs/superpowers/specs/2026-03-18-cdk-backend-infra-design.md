@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-18
 **Project**: translator-v2
-**Status**: Approved
+**Status**: Draft
 
 ---
 
@@ -16,6 +16,7 @@ AWS CDK infrastructure for the translator-v2 backend API. Rebuilds from scratch,
 Client → Lambda Function URL → Lambda (Node.js 22.x)
                                     ├── SourceBucket (S3)
                                     └── OutputBucket (S3)
+                                    └── AWS Translate (IAM)
 ```
 
 ## Resources
@@ -26,13 +27,13 @@ Client → Lambda Function URL → Lambda (Node.js 22.x)
 - **Bucket name**: `translator-v2-source-{account}-{region}`
 - **Encryption**: SSE-S3 (S3_MANAGED)
 - **Public access**: Blocked entirely
-- **CORS**: Allows PUT and GET from all origins (to be restricted in production)
+- **CORS**: Allows PUT and GET from all origins — restrict to specific domain in production
 - **Lifecycle**: Objects under `uploads/` prefix expire after 7 days
 - **Removal policy**: RETAIN
 
 ### S3: OutputBucket
 
-- **Purpose**: Stores translated output documents
+- **Purpose**: Stores translated output documents written by Lambda
 - **Bucket name**: `translator-v2-output-{account}-{region}`
 - **Encryption**: SSE-S3 (S3_MANAGED)
 - **Public access**: Blocked entirely
@@ -44,17 +45,26 @@ Client → Lambda Function URL → Lambda (Node.js 22.x)
 - **Trust**: `lambda.amazonaws.com`
 - **Managed policies**: `AWSLambdaBasicExecutionRole`
 - **Inline grants**:
-  - `sourceBucket.grantReadWrite` — full read/write on SourceBucket
-  - `outputBucket.grantReadWrite` — full read/write on OutputBucket
+  - `sourceBucket.grantReadWrite` — read/write on SourceBucket
+  - `outputBucket.grantReadWrite` — read/write on OutputBucket (Lambda writes translation results here)
+- **Inline policy — AWS Translate**:
+  - `translate:TranslateDocument`
+  - `translate:TranslateText`
+  - `translate:StartTextTranslationJob`
+  - `translate:DescribeTextTranslationJob`
+  - `translate:ListTextTranslationJobs`
+  - `translate:StopTextTranslationJob`
+  - Resource: `*` (AWS Translate does not support resource-level restrictions)
 
 ### Lambda: BackendFunction
 
-- **Runtime**: Node.js 22.x
+- **Runtime**: Node.js 22.x *(upgraded from Node.js 20.x in the previous stack)*
 - **Handler**: `index.handler`
 - **Memory**: 512 MB
 - **Timeout**: 30 seconds
-- **Initial code**: Inline placeholder (replaced by build artifact on deployment)
-- **Function URL**: Enabled, auth type NONE, CORS allows all origins/methods/headers
+- **Initial code**: Inline placeholder — replaced by build artifact on deployment
+- **Function URL**: Enabled, auth type NONE
+  - CORS: allows all origins/methods/headers — restrict allowed origins in production
 - **Environment variables**:
   - `SOURCE_BUCKET` — SourceBucket name
   - `OUTPUT_BUCKET` — OutputBucket name
@@ -63,14 +73,15 @@ Client → Lambda Function URL → Lambda (Node.js 22.x)
 ## Stack Configuration
 
 - **Stack name**: `TranslatorStack`
-- **Region**: `ap-northeast-1` (Tokyo), with `CDK_DEFAULT_REGION` override support
-- **Account**: Resolved from `CDK_DEFAULT_ACCOUNT`
+- **Region**: defaults to `ap-northeast-1` (Tokyo); overridable via `CDK_DEFAULT_REGION` environment variable
+- **Account**: resolved from `CDK_DEFAULT_ACCOUNT`
 
 ## Stack Outputs
 
 | Output key | Value |
 |-----------|-------|
-| `FunctionUrl` | Lambda Function URL |
+| `FunctionUrl` | Lambda Function URL (HTTPS endpoint) |
+| `FunctionName` | Lambda function name (for CI/CD deployments) |
 | `SourceBucketName` | SourceBucket name |
 | `OutputBucketName` | OutputBucket name |
 
@@ -88,17 +99,21 @@ The following resources from the previous stack are intentionally excluded:
 ```
 infra/
 ├── bin/
-│   └── infra.ts          # CDK App entry point
+│   └── infra.ts             # CDK App entry point (imports source-map-support)
 ├── lib/
 │   └── translator-stack.ts  # Stack definition (single flat stack)
 ├── cdk.json
-├── package.json
+├── package.json             # Dependencies: aws-cdk-lib, constructs, source-map-support
 └── tsconfig.json
 ```
 
+> **Note**: `bin/infra.ts` imports `source-map-support/register`. Ensure `source-map-support` is listed as a dependency in `infra/package.json`.
+
 ## Decisions
 
-- **Lambda Function URL over API Gateway**: Simpler setup for backend API development phase; API Gateway can be added later if throttling/auth features are needed.
-- **Single flat stack**: No nested constructs or multiple stacks — scope is small enough that separation would add complexity without benefit.
-- **No CloudFront**: Not needed at this stage; can be added when frontend hosting is required.
-- **Node.js 22.x**: Latest LTS runtime available in Lambda.
+- **Lambda Function URL over API Gateway**: Simpler for backend API development; API Gateway can be added later if throttling/auth features are needed.
+- **Single flat stack**: No nested constructs or multiple stacks — scope is small enough that separation adds complexity without benefit.
+- **No CloudFront**: Not needed at this stage; add when frontend hosting is required.
+- **Node.js 22.x**: Latest LTS runtime available in Lambda (previous stack used 20.x).
+- **OutputBucket grantReadWrite**: Lambda writes translation results to OutputBucket, so write permission is required (previous stack used read-only, which was insufficient).
+- **AWS Translate permissions included**: Core to the translation service's function; Lambda cannot invoke Translate without these.
