@@ -99,15 +99,13 @@ The following resources from the previous stack are intentionally excluded:
 ```
 infra/
 ├── bin/
-│   └── infra.ts             # CDK App entry point (imports source-map-support)
+│   └── infra.ts             # CDK App entry point
 ├── lib/
 │   └── translator-stack.ts  # Stack definition (single flat stack)
 ├── cdk.json
-├── package.json             # Dependencies: aws-cdk-lib, constructs, source-map-support
+├── package.json             # Dependencies: aws-cdk-lib, constructs
 └── tsconfig.json
 ```
-
-> **Note**: `bin/infra.ts` imports `source-map-support/register`. Ensure `source-map-support` is listed as a dependency in `infra/package.json`.
 
 ## Decisions
 
