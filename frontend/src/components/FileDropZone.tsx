@@ -51,11 +51,16 @@ export function FileDropZone({ file, error, onFileSelect }: Props) {
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
+        aria-label="PowerPoint ファイルを選択（ドラッグ&ドロップまたはクリック）"
         onDragOver={(e) => {
           e.preventDefault();
           setIsDragging(true);
         }}
-        onDragLeave={() => setIsDragging(false)}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setIsDragging(false);
+          }
+        }}
         onDrop={handleDrop}
         className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
           isDragging
