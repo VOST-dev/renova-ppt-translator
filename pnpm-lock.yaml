@@ -35,13 +35,13 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.600.0
         version: 3.1006.0
-      '@hono/node-server':
-        specifier: ^1.12.0
-        version: 1.19.11(hono@4.12.7)
       hono:
         specifier: ^4.5.0
         version: 4.12.7
     devDependencies:
+      '@hono/node-server':
+        specifier: ^1.12.0
+        version: 1.19.11(hono@4.12.7)
       '@types/node':
         specifier: ^20.14.0
         version: 20.19.37

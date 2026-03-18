@@ -1,4 +1,3 @@
-import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
 import { cors } from "hono/cors";
@@ -49,6 +48,7 @@ export const handler = handle(app);
 // ローカル開発サーバー（Lambda 環境では起動しない）
 if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
   const port = parseInt(process.env.PORT ?? "3000", 10);
+  const { serve } = await import("@hono/node-server");
   serve({ fetch: app.fetch, port }, (info) => {
     console.log(`Backend server running at http://localhost:${info.port}`);
   });
