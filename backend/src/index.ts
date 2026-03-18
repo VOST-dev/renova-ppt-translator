@@ -1,9 +1,16 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { handle } from "hono/aws-lambda";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { authMiddleware } from "./middleware/auth.js";
+import { jobs } from "./routes/jobs.js";
+import { languages } from "./routes/languages.js";
+import { storage } from "./routes/storage.js";
 
 const app = new Hono();
+
+// ─── Middleware ────────────────────────────────────────────────────────────────
 
 app.use("*", logger());
 app.use(
@@ -14,116 +21,37 @@ app.use(
     allowHeaders: ["Content-Type", "Authorization"],
   }),
 );
+app.use("/api/*", authMiddleware);
 
-// GET /api/languages - List supported language pairs
-app.get("/api/languages", (c) => {
-  return c.json({
-    languages: [
-      { code: "en", name: "English" },
-      { code: "ja", name: "Japanese" },
-      { code: "zh", name: "Chinese (Simplified)" },
-      { code: "ko", name: "Korean" },
-      { code: "fr", name: "French" },
-      { code: "de", name: "German" },
-      { code: "es", name: "Spanish" },
-      { code: "pt", name: "Portuguese" },
-    ],
-  });
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+// 順序重要: jobs より先に storage をマウントすると /:job_id が /download-url を誤捕捉する
+app.route("/api/languages", languages);
+app.route("/api/jobs", jobs); // GET /:job_id は単一セグメントのみマッチ
+app.route("/api", storage); // GET /jobs/:job_id/download-url はここでマッチ
+
+// ─── Error Handlers ───────────────────────────────────────────────────────────
+
+app.onError((err, c) => {
+  console.error("Unhandled error:", err);
+  return c.json({ error: "Internal server error" }, 500);
 });
 
-// GET /api/upload-url - Get presigned S3 URL for file upload
-app.get("/api/upload-url", (c) => {
-  const fileName = c.req.query("fileName");
-  const contentType = c.req.query("contentType");
-
-  if (!fileName || !contentType) {
-    return c.json({ error: "fileName and contentType query parameters are required" }, 400);
-  }
-
-  // Placeholder: actual implementation will generate a presigned S3 URL
-  return c.json({
-    uploadUrl: `https://placeholder-bucket.s3.amazonaws.com/${fileName}?presigned=true`,
-    key: `uploads/${Date.now()}-${fileName}`,
-  });
+app.notFound((c) => {
+  return c.json({ error: "Not found" }, 404);
 });
 
-// POST /api/jobs - Create a new translation job
-app.post("/api/jobs", async (c) => {
-  const body = await c.req.json<{
-    sourceKey: string;
-    sourceLanguage: string;
-    targetLanguage: string;
-    fileName: string;
-  }>();
+// ─── Entry Points ─────────────────────────────────────────────────────────────
 
-  if (!body.sourceKey || !body.sourceLanguage || !body.targetLanguage || !body.fileName) {
-    return c.json(
-      {
-        error: "sourceKey, sourceLanguage, targetLanguage, and fileName are required",
-      },
-      400,
-    );
-  }
+// Lambda Function URL handler
+export const handler = handle(app);
 
-  // Placeholder: actual implementation will submit an AWS Translate job
-  const jobId = `job-${Date.now()}`;
-  return c.json(
-    {
-      jobId,
-      status: "SUBMITTED",
-      sourceLanguage: body.sourceLanguage,
-      targetLanguage: body.targetLanguage,
-      fileName: body.fileName,
-      createdAt: new Date().toISOString(),
-    },
-    201,
-  );
-});
-
-// GET /api/jobs - List translation jobs
-app.get("/api/jobs", (c) => {
-  // Placeholder: actual implementation will query job records from DynamoDB or similar
-  return c.json({
-    jobs: [],
-    total: 0,
-  });
-});
-
-// GET /api/jobs/:job_id - Get job status
-app.get("/api/jobs/:job_id", (c) => {
-  const jobId = c.req.param("job_id");
-
-  // Placeholder: actual implementation will fetch job status from AWS Translate
-  return c.json({
-    jobId,
-    status: "IN_PROGRESS",
-    progress: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
-});
-
-// GET /api/jobs/:job_id/download-url - Get presigned URL for translated file
-app.get("/api/jobs/:job_id/download-url", (c) => {
-  const jobId = c.req.param("job_id");
-
-  // Placeholder: actual implementation will generate a presigned S3 download URL
-  return c.json({
-    downloadUrl: `https://placeholder-bucket.s3.amazonaws.com/translated/${jobId}/output.docx?presigned=true`,
-    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-  });
-});
-
-const port = parseInt(process.env.PORT ?? "3000", 10);
-
-serve(
-  {
-    fetch: app.fetch,
-    port,
-  },
-  (info) => {
+// ローカル開発サーバー（Lambda 環境では起動しない）
+if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  const port = parseInt(process.env.PORT ?? "3000", 10);
+  serve({ fetch: app.fetch, port }, (info) => {
     console.log(`Backend server running at http://localhost:${info.port}`);
-  },
-);
+  });
+}
 
 export default app;
