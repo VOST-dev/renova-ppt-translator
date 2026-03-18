@@ -42,7 +42,7 @@ Amazon Translate を使った PowerPoint ファイル翻訳 Web アプリケー�
                           │
                           ├─ Lambda Authorizer (Basic 認証)
                           │
-                          └─ [Lambda (Python)]
+                          └─ [Lambda (Node.js)]
                                 │
                                 ├── S3 署名付きURL発行
                                 ├── Amazon Translate ジョブ管理
