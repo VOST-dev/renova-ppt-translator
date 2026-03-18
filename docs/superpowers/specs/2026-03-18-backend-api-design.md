@@ -191,7 +191,7 @@ Amazon Translate のバッチ翻訳ジョブを開始する。
 
 **処理**:
 1. `ListTextTranslationJobsCommand` を呼び出す（`Filter.JobName` はプレフィックスではなく完全一致のため使用しない）
-2. レスポンスに `NextToken` が含まれる場合は全ページを取得するまで再帰的に呼び出す
+2. レスポンスに `NextToken` が含まれる場合は全ページを取得するまで再帰的に呼び出す。最大 10 ページ（500 件）で打ち切る
 3. 取得した全ジョブのうち、`JobName` が `ppt-translator-` で始まるものをクライアント側でフィルタリングする
 
 **レスポンス 200**:
@@ -248,7 +248,7 @@ Amazon Translate のバッチ翻訳ジョブを開始する。
 1. `DescribeTextTranslationJobCommand` でジョブ詳細を取得する（`ResourceNotFoundException` → 404）
 2. ジョブ名が `ppt-translator-` で始まらない場合は即座に `404` を返す（フィールドアクセスより前）
 3. ステータスが `COMPLETED` 以外の場合は即座に `404` を返す（フィールドアクセスより前）。ステータスに応じたエラーメッセージを返す（後述）
-4. `OutputDataConfig.S3Uri` から `s3://{OUTPUT_BUCKET}/` を除いた部分を出力キープレフィックスとして抽出する。末尾に `/` がない場合は付与する（例: `s3://bucket/accountId-TranslateText-jobId/` → `accountId-TranslateText-jobId/`）
+4. `OutputDataConfig.S3Uri` が存在しない（null/undefined）場合は `502` を返す。存在する場合、`s3://{OUTPUT_BUCKET}/` を除いた部分を出力キープレフィックスとして抽出する。末尾に `/` がない場合は付与する（例: `s3://bucket/accountId-TranslateText-jobId/` → `accountId-TranslateText-jobId/`）
 5. `InputDataConfig.S3Uri` からベースファイル名を抽出する（パスの最後のセグメントのみ。例: `s3://bucket/uploads/file.pptx` → `file.pptx`）
 6. 出力 S3 キーを構築する: `{outputKeyPrefix}{targetLangCode}.{baseFilename}`（例: `accountId-TranslateText-jobId/en.file.pptx`）
 7. `GetObjectCommand` + `getSignedUrl()` で有効期限 15 分の URL を生成する
@@ -355,6 +355,58 @@ export interface CreateJobRequest {
 ## Testing
 
 ユニットテストは今回スコープ外。AWS SDK 呼び出しが中心のため、実 AWS 環境での手動動作確認を採用する。TypeScript の strict モードによる型チェックが静的バリデーションの役割を担う。
+
+---
+
+## CDK Changes Required
+
+バックエンド API を動作させるために、`infra/lib/translator-stack.ts` に以下の変更が必要。これらはバックエンド API 実装と同時に対応する。
+
+### 1. `backendRole` に SSM 読み取り権限を追加
+
+```typescript
+backendRole.addToPolicy(
+  new iam.PolicyStatement({
+    actions: ["ssm:GetParameter"],
+    resources: [
+      `arn:aws:ssm:${this.region}:${this.account}:parameter/ppt-translator/*`,
+    ],
+  }),
+);
+```
+
+### 2. `backendRole` に `translate.amazonaws.com` の信頼関係を追加
+
+`StartTextTranslationJobCommand` の `DataAccessRoleArn` に Lambda 実行ロールを使用するため、Amazon Translate がこのロールを引き受けられるよう信頼ポリシーを追加する。
+
+```typescript
+backendRole.assumeRolePolicy?.addStatements(
+  new iam.PolicyStatement({
+    actions: ["sts:AssumeRole"],
+    principals: [new iam.ServicePrincipal("translate.amazonaws.com")],
+  }),
+);
+```
+
+### 3. Lambda 環境変数に `TRANSLATE_ROLE_ARN` を追加
+
+```typescript
+environment: {
+  SOURCE_BUCKET: sourceBucket.bucketName,
+  OUTPUT_BUCKET: outputBucket.bucketName,
+  TRANSLATE_ROLE_ARN: backendRole.roleArn,  // 追加
+  NODE_ENV: "production",
+},
+```
+
+### 4. Stack Output に `TranslateRoleArn` を追加
+
+```typescript
+new cdk.CfnOutput(this, "TranslateRoleArn", {
+  value: backendRole.roleArn,
+  description: "IAM role ARN used as DataAccessRoleArn for Amazon Translate jobs",
+});
+```
 
 ---
 
