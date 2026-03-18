@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import * as cdk from "aws-cdk-lib";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
@@ -90,9 +91,7 @@ export class TranslatorStack extends cdk.Stack {
     const backendFunction = new lambda.Function(this, "BackendFunction", {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: "index.handler",
-      code: lambda.Code.fromInline(
-        `exports.handler = async () => ({ statusCode: 200, body: '{"message":"placeholder"}' });`,
-      ),
+      code: lambda.Code.fromAsset(path.join(__dirname, "../../backend/dist")),
       role: backendRole,
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,

@@ -9,6 +9,7 @@
     "build:frontend": "pnpm --filter frontend build",
     "build:backend": "pnpm --filter backend build",
     "build:infra": "pnpm --filter infra build",
+    "deploy": "pnpm build:backend && pnpm --filter infra deploy",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
