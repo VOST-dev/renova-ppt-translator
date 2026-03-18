@@ -1,10 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchLanguages, type Language } from "../lib/api";
-
-const languageKeys = {
-  all: ["languages"] as const,
-  list: () => [...languageKeys.all, "list"] as const,
-};
+import { languageKeys } from "../lib/queryKeys";
 
 export function useLanguages(): {
   languages: Language[];
