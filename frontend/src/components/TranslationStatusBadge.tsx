@@ -21,6 +21,14 @@ const STATUS_CONFIG: Record<Job["status"], { label: string; className: string }>
     label: "失敗",
     className: "bg-red-100 text-red-700",
   },
+  STOP_REQUESTED: {
+    label: "停止中",
+    className: "bg-yellow-100 text-yellow-700",
+  },
+  STOPPED: {
+    label: "停止済",
+    className: "bg-gray-100 text-gray-500",
+  },
 };
 
 export function TranslationStatusBadge({ status }: Props) {
