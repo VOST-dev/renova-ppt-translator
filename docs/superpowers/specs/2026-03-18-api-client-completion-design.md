@@ -107,7 +107,8 @@ export interface CreateJobRequest {
 export interface CreateJobResponse {
   jobId: string;
   jobName: string;
-  status: string;
+  status: "SUBMITTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED"
+        | "STOP_REQUESTED" | "STOPPED";
   sourceLanguage: string;
   targetLanguage: string;
   fileName: string;
