@@ -14,16 +14,20 @@ export function useCreateJob(onSuccess: () => void) {
 
   return useMutation<CreateJobResponse, Error, CreateJobParams>({
     mutationFn: async ({ file, sourceLanguage, targetLanguage }) => {
+      // Fallback MIME type for .pptx when file.type is empty
+      const contentType =
+        file.type || "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
       // Step 1: 署名付きアップロードURLを取得
-      const { uploadUrl, key } = await fetchUploadUrl(file.name, file.type);
+      const { uploadUrl, key } = await fetchUploadUrl(file.name, contentType);
 
       // Step 2: S3へ直接PUT（apiFetch ではなく生の fetch を使う）
       // apiFetch は Authorization ヘッダーを付与するため S3 署名付きURLに送ると403になる。
-      // Content-Type は fetchUploadUrl に渡した file.type と必ず一致させること。
+      // Content-Type は fetchUploadUrl に渡した contentType と必ず一致させること。
       const uploadRes = await fetch(uploadUrl, {
         method: "PUT",
         body: file,
-        headers: { "Content-Type": file.type },
+        headers: { "Content-Type": contentType },
       });
       if (!uploadRes.ok) {
         throw new Error(`S3 upload failed: ${uploadRes.status}`);
