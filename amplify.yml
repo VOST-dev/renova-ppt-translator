@@ -4,10 +4,10 @@ frontend:
     preBuild:
       commands:
         - npm install -g pnpm
-        - cd frontend && pnpm install --frozen-lockfile
+        - pnpm i
     build:
       commands:
-        - cd frontend && pnpm build
+        - pnpm build:frontend
   artifacts:
     baseDirectory: frontend/dist
     files:
