@@ -100,6 +100,7 @@ export class TranslatorStack extends cdk.Stack {
         OUTPUT_BUCKET: outputBucket.bucketName,
         TRANSLATE_ROLE_ARN: backendRole.roleArn,
         NODE_ENV: "production",
+        ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN ?? "http://localhost:5173",
       },
     });
 
@@ -108,9 +109,9 @@ export class TranslatorStack extends cdk.Stack {
     const functionUrl = backendFunction.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
-        allowedOrigins: ["*"], // Restrict to specific domain in production
+        allowedOrigins: [process.env.ALLOWED_ORIGIN ?? "http://localhost:5173"],
         allowedMethods: [lambda.HttpMethod.ALL],
-        allowedHeaders: ["*"],
+        allowedHeaders: ["Authorization", "Content-Type"],
       },
     });
 
