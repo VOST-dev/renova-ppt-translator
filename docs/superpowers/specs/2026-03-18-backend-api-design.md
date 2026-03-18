@@ -63,7 +63,7 @@ backend/src/
 Hono の `basicAuth` ミドルウェアを使用。全 `/api/*` エンドポイントに適用する。
 
 ### 資格情報の取得
-Lambda 起動時（モジュール初期化時）に `configService` 経由で SSM Parameter Store から取得し、モジュールスコープにキャッシュする。
+Lambda 起動時（モジュール初期化時）に `configService` 経由で SSM Parameter Store から取得し、モジュールスコープにキャッシュする。SSM クライアントは `AWS_REGION` 環境変数で指定されたリージョンを使用する。SSM の取得に失敗した場合（パラメーター未存在・権限エラー等）は例外をスローしてコールドスタートを失敗させる（Lambda は 500 を返す）。エラーは `console.error` でログ出力する。
 
 ```
 SSM パラメーター名:
@@ -73,6 +73,20 @@ SSM パラメーター名:
 
 ### ローカル開発フォールバック
 環境変数 `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` が設定されている場合は SSM を呼ばずそちらを使用する。
+
+---
+
+## Amazon Translate 出力パス規則
+
+Amazon Translate バッチジョブの出力は以下のパターンで S3 に格納される。
+
+```
+s3://{OUTPUT_BUCKET}/{accountId}-TranslateText-{jobId}/{targetLangCode}.{baseFilename}
+```
+
+- `{accountId}-TranslateText-{jobId}/` プレフィックスは `DescribeTextTranslationJobCommand` レスポンスの `OutputDataConfig.S3Uri` から取得できる
+- `{baseFilename}` は入力ファイルのベース名（パスは除く）。例: `uploads/1710000000000-slides.pptx` → `1710000000000-slides.pptx`
+- `{targetLangCode}` が先頭にドット区切りで付与される。例: `en.1710000000000-slides.pptx`
 
 ---
 
@@ -94,6 +108,9 @@ Amazon Translate がサポートする言語一覧を返す。
 }
 ```
 
+**エラー**:
+- `502`: AWS API エラー
+
 ---
 
 ### GET /api/upload-url
@@ -102,7 +119,7 @@ S3 への直接アップロード用の署名付き PUT URL を発行する。
 
 **クエリパラメーター**:
 - `fileName` (必須): アップロードするファイル名
-- `contentType` (必須): MIMEタイプ（例: `application/vnd.openxmlformats-officedocument.presentationml.presentation`）
+- `contentType` (必須): MIMEタイプ。PPTX 以外も受け付ける（Amazon Translate 側が対応フォーマットを検証する）
 
 **処理**: `PutObjectCommand` + `getSignedUrl()` で有効期限 15 分の URL を生成。S3 キー: `uploads/{timestamp}-{fileName}`
 
@@ -116,6 +133,7 @@ S3 への直接アップロード用の署名付き PUT URL を発行する。
 
 **エラー**:
 - `400`: `fileName` または `contentType` が未指定
+- `502`: AWS API エラー
 
 ---
 
@@ -133,14 +151,22 @@ Amazon Translate のバッチ翻訳ジョブを開始する。
 }
 ```
 
+**リクエストボディバリデーション**:
+- `sourceKey`, `sourceLanguage`, `targetLanguage`, `fileName` はすべて必須・非空文字列
+- `sourceLanguage` / `targetLanguage` の BCP-47 フォーマット検証は行わない（Amazon Translate API が無効コードを `ValidationException` で拒否する）
+- `sourceKey` が `uploads/` で始まることのチェックは行わない
+
 **処理**: `StartTextTranslationJobCommand` を呼び出す。
 
 - ジョブ名: `ppt-translator-{timestamp}`
 - 入力: `s3://{SOURCE_BUCKET}/{sourceKey}`
 - 出力: `s3://{OUTPUT_BUCKET}/`
-- `DataAccessRoleArn`: Lambda に付与された IAM ロール ARN（`AWS_LAMBDA_FUNCTION_NAME` から動的に取得、または環境変数 `TRANSLATE_ROLE_ARN` で指定）
+- `DataAccessRoleArn`: 環境変数 `TRANSLATE_ROLE_ARN` から取得（必須）
 
 **レスポンス 201**:
+
+`POST /api/jobs` のレスポンスは `CreateJobResponse` 型で、`fileName` を含む（Amazon Translate API は `fileName` を管理しないため、`Job` 型とは別に定義する）。`GET /api/jobs` および `GET /api/jobs/:job_id` のレスポンスには `fileName` は含まれない（DB 不使用のため保持不可）。
+
 ```json
 {
   "jobId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
@@ -163,7 +189,10 @@ Amazon Translate のバッチ翻訳ジョブを開始する。
 
 このアプリが作成した翻訳ジョブの一覧を返す。
 
-**処理**: `ListTextTranslationJobsCommand` を呼び出し、`Filter.JobName` で `ppt-translator-` プレフィックスのジョブに絞り込む。
+**処理**:
+1. `ListTextTranslationJobsCommand` を呼び出す（`Filter.JobName` はプレフィックスではなく完全一致のため使用しない）
+2. レスポンスに `NextToken` が含まれる場合は全ページを取得するまで再帰的に呼び出す
+3. 取得した全ジョブのうち、`JobName` が `ppt-translator-` で始まるものをクライアント側でフィルタリングする
 
 **レスポンス 200**:
 ```json
@@ -182,13 +211,16 @@ Amazon Translate のバッチ翻訳ジョブを開始する。
 }
 ```
 
+**エラー**:
+- `502`: AWS API エラー
+
 ---
 
 ### GET /api/jobs/:job_id
 
 特定ジョブのステータスを取得する。
 
-**処理**: `DescribeTextTranslationJobCommand` を呼び出す。
+**処理**: `DescribeTextTranslationJobCommand` を呼び出す。ジョブ名が `ppt-translator-` プレフィックスで始まらない場合（他アプリのジョブ）は `404` を返す。
 
 **レスポンス 200**:
 ```json
@@ -203,7 +235,8 @@ Amazon Translate のバッチ翻訳ジョブを開始する。
 ```
 
 **エラー**:
-- `404`: ジョブが見つからない
+- `404`: ジョブが見つからない、またはジョブ名が `ppt-translator-` プレフィックスで始まらない
+- `502`: AWS API エラー（`ResourceNotFoundException` 以外）
 
 ---
 
@@ -211,9 +244,14 @@ Amazon Translate のバッチ翻訳ジョブを開始する。
 
 翻訳済みファイルの署名付き GET URL を発行する。
 
-**処理**: Amazon Translate の出力パス規則に従い S3 キーを構築し、`GetObjectCommand` + `getSignedUrl()` で有効期限 15 分の URL を生成する。
-
-出力パス: `{jobId}/{sourceKey}` （Amazon Translate がジョブ ID のプレフィックス配下に出力する）
+**処理**:
+1. `DescribeTextTranslationJobCommand` でジョブ詳細を取得する（`ResourceNotFoundException` → 404）
+2. ジョブ名が `ppt-translator-` で始まらない場合は即座に `404` を返す（フィールドアクセスより前）
+3. ステータスが `COMPLETED` 以外の場合は即座に `404` を返す（フィールドアクセスより前）。ステータスに応じたエラーメッセージを返す（後述）
+4. `OutputDataConfig.S3Uri` から `s3://{OUTPUT_BUCKET}/` を除いた部分を出力キープレフィックスとして抽出する。末尾に `/` がない場合は付与する（例: `s3://bucket/accountId-TranslateText-jobId/` → `accountId-TranslateText-jobId/`）
+5. `InputDataConfig.S3Uri` からベースファイル名を抽出する（パスの最後のセグメントのみ。例: `s3://bucket/uploads/file.pptx` → `file.pptx`）
+6. 出力 S3 キーを構築する: `{outputKeyPrefix}{targetLangCode}.{baseFilename}`（例: `accountId-TranslateText-jobId/en.file.pptx`）
+7. `GetObjectCommand` + `getSignedUrl()` で有効期限 15 分の URL を生成する
 
 **レスポンス 200**:
 ```json
@@ -224,14 +262,28 @@ Amazon Translate のバッチ翻訳ジョブを開始する。
 ```
 
 **エラー**:
-- `404`: ジョブが存在しないまたは未完了
+
+| 条件 | ステータス | エラーメッセージ |
+|---|---|---|
+| ジョブが存在しない | `404` | `"Job not found"` |
+| `ppt-translator-` プレフィックスでない | `404` | `"Job not found"` |
+| ステータスが `SUBMITTED` または `IN_PROGRESS` | `404` | `"Translation job is not yet complete"` |
+| ステータスが `FAILED` | `404` | `"Translation job failed"` |
+| ステータスが `STOPPED` または `STOP_REQUESTED` | `404` | `"Translation job was stopped"` |
+| AWS API エラー（上記以外） | `502` | `"Internal server error"` |
 
 ---
 
 ## Type Definitions (`src/types.ts`)
 
 ```typescript
-export type JobStatus = "SUBMITTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "STOP_REQUESTED" | "STOPPED";
+export type JobStatus =
+  | "SUBMITTED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "FAILED"
+  | "STOP_REQUESTED"
+  | "STOPPED";
 
 export interface Job {
   jobId: string;
@@ -241,6 +293,17 @@ export interface Job {
   targetLanguage: string;
   submittedTime?: string;
   endTime?: string;
+}
+
+// POST /api/jobs レスポンス専用（fileName と createdAt を含む）
+export interface CreateJobResponse {
+  jobId: string;
+  jobName: string;
+  status: JobStatus;
+  sourceLanguage: string;
+  targetLanguage: string;
+  fileName: string;
+  createdAt: string;
 }
 
 export interface CreateJobRequest {
@@ -281,8 +344,8 @@ export interface CreateJobRequest {
 |---|---|---|---|
 | `SOURCE_BUCKET` | CDK Stack Output | アップロード先・翻訳入力バケット名 | ✅ |
 | `OUTPUT_BUCKET` | CDK Stack Output | 翻訳結果バケット名 | ✅ |
-| `TRANSLATE_ROLE_ARN` | CDK Stack Output | Amazon Translate 用 IAM ロール ARN | ✅ |
-| `AWS_REGION` | Lambda 自動付与 | AWS SDK リージョン | - |
+| `TRANSLATE_ROLE_ARN` | CDK Stack Output | Amazon Translate `DataAccessRoleArn` | ✅ |
+| `AWS_REGION` | Lambda 自動付与 | AWS SDK（S3・Translate・SSM）リージョン | - |
 | `PORT` | 任意 | ローカル開発サーバーポート（デフォルト: 3000） | - |
 | `BASIC_AUTH_USER` | ローカル開発のみ | SSM フォールバック用ユーザー名 | - |
 | `BASIC_AUTH_PASS` | ローカル開発のみ | SSM フォールバック用パスワード | - |
@@ -303,4 +366,4 @@ export interface CreateJobRequest {
 |---|---|---|
 | 認証方式 | API Gateway Lambda Authorizer | Hono `basicAuth` ミドルウェア |
 | 資格情報保存 | AWS SSM Parameter Store (SecureString) | 同上（変更なし） |
-| システム構成図 | API Gateway → Lambda Authorizer → Lambda | Lambda Function URL → Hono basicAuth → Lambda |
+| システム構成図 | `API Gateway → Lambda Authorizer → Lambda` | `Lambda Function URL → Hono basicAuth → Lambda` |
