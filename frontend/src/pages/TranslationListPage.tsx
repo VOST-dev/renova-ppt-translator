@@ -2,12 +2,25 @@ import { Loader2 } from "lucide-react";
 import { TranslationTable } from "../components/TranslationTable";
 import { useJobs } from "../hooks/useJobs";
 
-export function TranslationListPage() {
+interface Props {
+  onNavigateCreate: () => void;
+}
+
+export function TranslationListPage({ onNavigateCreate }: Props) {
   const { data, isPending, isError } = useJobs();
 
   return (
     <section>
-      <h2 className="mb-4 text-xl font-semibold">翻訳ジョブ一覧</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold">翻訳ジョブ一覧</h2>
+        <button
+          type="button"
+          onClick={onNavigateCreate}
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+        >
+          翻訳追加
+        </button>
+      </div>
 
       {isPending && (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
