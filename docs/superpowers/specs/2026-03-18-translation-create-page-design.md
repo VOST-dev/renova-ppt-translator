@@ -45,7 +45,7 @@ hooks/
 
 ## UI レイアウト
 
-センタードフォーム（中央寄せ）。既存の `TranslationListPage` と同じページ幅制約を使用する。
+センタードフォーム（中央寄せ）。`App.tsx` の `<main className="container mx-auto px-4 py-8">` 内に `CreateTranslationPage` を直接レンダリングするため、既存の `TranslationListPage` と同じページ幅制約が自動的に適用される。`CreateTranslationPage` 自身は追加のコンテナラッパーを持たない。
 
 ```
 [← 一覧に戻る]
@@ -63,7 +63,7 @@ hooks/
 [翻訳を開始]                          ← 条件を満たすまで disabled
 ```
 
-ファイル選択後はドロップゾーン内にファイル名とサイズを表示する。
+ファイル選択後はドロップゾーン内にファイル名とサイズを表示する。ドラッグオーバー中はドロップゾーンのボーダーと背景色をハイライト表示する（実装はコンポーネントに委ねる）。
 
 ---
 
@@ -73,6 +73,7 @@ hooks/
 |------|----------------|
 | 拡張子が `.pptx` 以外 | 「.pptx ファイルを選択してください」 |
 | ファイルサイズが 100MB 超 | 「ファイルサイズは 100MB 以下にしてください」 |
+| 翻訳元と翻訳先に同じ言語を選択 | 「翻訳元と翻訳先に同じ言語は選択できません」|
 | ファイル未選択 または 言語未選択 | 「翻訳を開始」ボタンを disabled（エラーメッセージなし）|
 
 バリデーションはクライアントサイドのみ。エラーはドロップゾーン直下にインライン表示する。
@@ -108,7 +109,7 @@ hooks/
 | `targetLanguage` | `string` | 翻訳先言語コード（例: `"en"`） |
 | `fileError` | `string \| null` | ファイルバリデーションエラーメッセージ |
 
-送信ボタンの活性条件: `file !== null && !fileError && sourceLanguage !== "" && targetLanguage !== ""`
+送信ボタンの活性条件: `file !== null && !fileError && sourceLanguage !== "" && targetLanguage !== "" && sourceLanguage !== targetLanguage`
 
 ---
 
@@ -122,7 +123,9 @@ hooks/
 
 ## 言語セレクトボックス
 
-`useLanguages` hook で `GET /api/languages` を取得し、`Language[]` を両セレクトに渡す。
+`useLanguages` hook で `GET /api/languages` を取得し、ソート済みの `Language[]` を両セレクトに渡す。
+
+`fetchLanguages()` は `{ languages: Language[] }` を返すため、hook 内で `data.languages` を取り出してから `name` 昇順でソートして返す。
 
 - ローディング中: セレクト disabled、プレースホルダー「読み込み中...」
 - 取得成功: 言語名でソートして表示（`language.name` 昇順）
@@ -132,7 +135,10 @@ hooks/
 
 ## 成功時の動作
 
-ジョブ作成成功後、`setView("list")` を呼び出して一覧画面に戻る。一覧は TanStack Query のキャッシュが自動的に再フェッチされるため、新規ジョブが即座に表示される。
+ジョブ作成成功後、以下の2つを行う:
+
+1. `queryClient.invalidateQueries({ queryKey: jobKeys.list() })` を呼び出してジョブ一覧キャッシュを無効化する（TanStack Query は mutation 成功を自動検知しないため、明示的な invalidate が必須）
+2. `setView("list")` を呼び出して一覧画面に戻る
 
 ---
 
