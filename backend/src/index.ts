@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
 import { logger } from "hono/logger";
 import { authMiddleware } from "./middleware/auth.js";
 import { jobs } from "./routes/jobs.js";
@@ -32,6 +33,9 @@ app.route("/api", storage); // GET /jobs/:job_id/download-url はここでマッ
 // ─── Error Handlers ───────────────────────────────────────────────────────────
 
 app.onError((err, c) => {
+  if (err instanceof HTTPException) {
+    return err.getResponse();
+  }
   console.error("Unhandled error:", err);
   return c.json({ error: "Internal server error" }, 500);
 });

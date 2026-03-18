@@ -1,11 +1,16 @@
-if (!import.meta.env.VITE_API_USER || !import.meta.env.VITE_API_PASS) {
-  throw new Error("VITE_API_USER and VITE_API_PASS must be set");
+if (
+  !import.meta.env.VITE_API_USER ||
+  !import.meta.env.VITE_API_PASS ||
+  !import.meta.env.VITE_API_BASE_URL
+) {
+  throw new Error("VITE_API_USER, VITE_API_PASS, and VITE_API_BASE_URL must be set");
 }
 
 const authHeader = `Basic ${btoa(`${import.meta.env.VITE_API_USER}:${import.meta.env.VITE_API_PASS}`)}`;
+const baseUrl = import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "");
 
 async function apiFetch(path: string, init?: RequestInit): Promise<unknown> {
-  const res = await fetch(path, {
+  const res = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
