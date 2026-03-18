@@ -52,7 +52,8 @@ export const storageService = {
     }
 
     // `s3://{OUTPUT_BUCKET}/` を除いた出力キープレフィックスを取得し、末尾の `/` を保証する
-    const outputPrefix = job.outputS3Uri.replace(`s3://${OUTPUT_BUCKET}/`, "").replace(/\/?$/, "/");
+    const rawPrefix = job.outputS3Uri.replace(`s3://${OUTPUT_BUCKET}/`, "");
+    const outputPrefix = rawPrefix === "" ? "" : rawPrefix.replace(/\/?$/, "/");
 
     // 入力 S3Uri からベースファイル名を抽出（パスは除く）
     const inputKey = job.inputS3Uri.replace(`s3://${SOURCE_BUCKET}/`, "");
