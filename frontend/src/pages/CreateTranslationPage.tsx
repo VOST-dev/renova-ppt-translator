@@ -5,9 +5,52 @@ import { useState } from "react";
 import { FileDropZone } from "../components/FileDropZone";
 import { useCreateJob } from "../hooks/useCreateJob";
 import { useLanguages } from "../hooks/useLanguages";
+import type { Language } from "../lib/api";
 
 interface Props {
   onNavigateList: () => void;
+}
+
+interface LanguageSelectProps {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+  isLoading: boolean;
+  languages: Language[];
+}
+
+function LanguageSelect({
+  id,
+  label,
+  value,
+  onChange,
+  disabled,
+  isLoading,
+  languages,
+}: LanguageSelectProps) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium" htmlFor={id}>
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+      >
+        <option value="">{isLoading ? "読み込み中..." : "選択してください"}</option>
+        {languages.map((lang) => (
+          <option key={lang.code} value={lang.code}>
+            {lang.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 export function CreateTranslationPage({ onNavigateList }: Props) {
@@ -58,45 +101,24 @@ export function CreateTranslationPage({ onNavigateList }: Props) {
         <FileDropZone file={file} error={fileError} onFileSelect={handleFileSelect} />
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="source-language">
-              翻訳元言語
-            </label>
-            <select
-              id="source-language"
-              value={sourceLanguage}
-              onChange={(e) => setSourceLanguage(e.target.value)}
-              disabled={isLoadingLanguages || isLanguagesError}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
-            >
-              <option value="">{isLoadingLanguages ? "読み込み中..." : "選択してください"}</option>
-              {languages.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="target-language">
-              翻訳先言語
-            </label>
-            <select
-              id="target-language"
-              value={targetLanguage}
-              onChange={(e) => setTargetLanguage(e.target.value)}
-              disabled={isLoadingLanguages || isLanguagesError}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
-            >
-              <option value="">{isLoadingLanguages ? "読み込み中..." : "選択してください"}</option>
-              {languages.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <LanguageSelect
+            id="source-language"
+            label="翻訳元言語"
+            value={sourceLanguage}
+            onChange={setSourceLanguage}
+            disabled={isLoadingLanguages || isLanguagesError || isSubmitting}
+            isLoading={isLoadingLanguages}
+            languages={languages}
+          />
+          <LanguageSelect
+            id="target-language"
+            label="翻訳先言語"
+            value={targetLanguage}
+            onChange={setTargetLanguage}
+            disabled={isLoadingLanguages || isLanguagesError || isSubmitting}
+            isLoading={isLoadingLanguages}
+            languages={languages}
+          />
         </div>
 
         {isLanguagesError && <p className="text-sm text-red-600">言語の取得に失敗しました</p>}
@@ -110,6 +132,7 @@ export function CreateTranslationPage({ onNavigateList }: Props) {
         <button
           type="submit"
           disabled={!canSubmit || isSubmitting}
+          aria-busy={isSubmitting}
           className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
           {isSubmitting && <Loader2 className="size-4 animate-spin" />}
