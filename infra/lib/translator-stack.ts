@@ -53,6 +53,13 @@ export class TranslatorStack extends cdk.Stack {
       ],
     });
 
+    backendRole.assumeRolePolicy?.addStatements(
+      new iam.PolicyStatement({
+        actions: ["sts:AssumeRole"],
+        principals: [new iam.ServicePrincipal("translate.amazonaws.com")],
+      }),
+    );
+
     sourceBucket.grantReadWrite(backendRole);
     outputBucket.grantReadWrite(backendRole);
 
@@ -65,8 +72,16 @@ export class TranslatorStack extends cdk.Stack {
           "translate:DescribeTextTranslationJob",
           "translate:ListTextTranslationJobs",
           "translate:StopTextTranslationJob",
+          "translate:ListLanguages",
         ],
         resources: ["*"],
+      }),
+    );
+
+    backendRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:GetParameter"],
+        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/ppt-translator/*`],
       }),
     );
 
@@ -84,6 +99,7 @@ export class TranslatorStack extends cdk.Stack {
       environment: {
         SOURCE_BUCKET: sourceBucket.bucketName,
         OUTPUT_BUCKET: outputBucket.bucketName,
+        TRANSLATE_ROLE_ARN: backendRole.roleArn,
         NODE_ENV: "production",
       },
     });
@@ -119,6 +135,11 @@ export class TranslatorStack extends cdk.Stack {
     new cdk.CfnOutput(this, "OutputBucketName", {
       value: outputBucket.bucketName,
       description: "S3 bucket for translated documents",
+    });
+
+    new cdk.CfnOutput(this, "TranslateRoleArn", {
+      value: backendRole.roleArn,
+      description: "IAM role ARN used as DataAccessRoleArn for Amazon Translate jobs",
     });
   }
 }
