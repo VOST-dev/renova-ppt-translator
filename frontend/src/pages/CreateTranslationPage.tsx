@@ -97,7 +97,7 @@ export function CreateTranslationPage({ onNavigateList }: Props) {
 
       <h2 className="mb-6 text-xl font-semibold">翻訳登録</h2>
 
-      <form onSubmit={handleSubmit} className="max-w-lg space-y-6">
+      <form onSubmit={handleSubmit} className="mx-auto max-w-lg space-y-6">
         <FileDropZone file={file} error={fileError} onFileSelect={handleFileSelect} />
 
         <div className="grid grid-cols-2 gap-4">
