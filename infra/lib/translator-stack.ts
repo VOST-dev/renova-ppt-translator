@@ -106,13 +106,10 @@ export class TranslatorStack extends cdk.Stack {
 
     // ─── Function URL ─────────────────────────────────────────────────────────
 
+    // CORS はアプリケーション層（Hono ミドルウェア）で処理する。
+    // Lambda Function URL 側で設定すると二重ヘッダーになるため設定しない。
     const functionUrl = backendFunction.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
-      cors: {
-        allowedOrigins: [process.env.ALLOWED_ORIGIN ?? "http://localhost:5173"],
-        allowedMethods: [lambda.HttpMethod.ALL],
-        allowedHeaders: ["Authorization", "Content-Type"],
-      },
     });
 
     // ─── Stack Outputs ────────────────────────────────────────────────────────
