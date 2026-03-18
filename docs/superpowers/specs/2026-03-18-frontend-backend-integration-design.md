@@ -111,9 +111,9 @@ export async function fetchDownloadUrl(jobId: string): Promise<{ downloadUrl: st
 
 ```ts
 app.use('*', cors({
-  origin: process.env.ALLOWED_ORIGIN ?? 'http://localhost:5173',
+  origin: [process.env.ALLOWED_ORIGIN ?? 'http://localhost:5173'],
   allowHeaders: ['Authorization', 'Content-Type'],
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 ```
 
@@ -182,12 +182,11 @@ frontend:
   phases:
     preBuild:
       commands:
-        - cd frontend
         - npm install -g pnpm
-        - pnpm install --frozen-lockfile
+        - cd frontend && pnpm install --frozen-lockfile
     build:
       commands:
-        - pnpm build
+        - cd frontend && pnpm build
   artifacts:
     baseDirectory: frontend/dist
     files:
@@ -196,6 +195,8 @@ frontend:
     paths:
       - frontend/node_modules/**/*
 ```
+
+> 各フェーズはリポジトリルートから独立して実行されるため、`preBuild` の `cd` は `build` フェーズに引き継がれない。
 
 ---
 
